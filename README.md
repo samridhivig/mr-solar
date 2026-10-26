@@ -11,9 +11,9 @@ Built for the Devpost [Learn AI Basics](https://learn-ai-basics.devpost.com/) ha
 - **Branch older than two weeks:** rings
 - **Review comments:** orbiting moons
 
-Hover a planet to see its branch metadata. Click it to open the action capsule (`Sync`, `Cascade Sync`, `Open in Repo`). `Cascade Sync` runs `claude "/cascade-sync <branch>"` in a new Terminal window and plays a healing animation down the branch chain that clears the cracks.
+Hover a planet to see its branch metadata. Click it to open the action capsule (`Sync`, `Cascade Sync`, `Open in Repo`). `Cascade Sync` runs `claude "/cascade-sync <branch>"` in a new Terminal window, and the server marks that branch and every branch stacked on it as synced, so their cracks disappear. `Merge MR` is disabled until GitHub is connected.
 
-The MR data is a built-in demo stack in `server.mjs`, so it runs without a GitLab or GitHub account.
+The MR data is a built-in demo stack in `server.mjs`, so it runs without a GitLab or GitHub account. Because the demo branches don't exist in a real repository, the synced state in the UI is simulated. Restart the server to reset the demo.
 
 ## Run it
 

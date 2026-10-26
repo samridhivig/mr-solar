@@ -52,23 +52,41 @@ Build mode: fast
 ## Hands-on Checkpoints
 
 - [x] Early usable behavior explored — Slice 2 (Planetary Tree Topology & Visual Statuses)
-- [ ] Final kick-the-tires exploration and feedback completed — Slice 4 (Cascade Sync & Particle Healing)
+- [x] Final kick-the-tires exploration and feedback completed — Slice 4 (Cascade Sync & Particle Healing)
 
 ## Final Review
 
-- [ ] Final review complete — feedback resolved and learner confirms ready to ship
+- [x] Final review complete — feedback resolved and learner confirms ready to ship
 
 ## Code Tour and App Map
 
-- [ ] Learning activity complete — guided route, focused alternative, prior practice connected, or brief recap
-- [ ] Optional edit and transfer reflection addressed — offered/declined/already covered/not applicable as appropriate
-- [ ] `devpost/app-map.html` generated from finished code, checked, and shown, including a project-grounded practice to reuse
+- [x] Learning activity complete — guided route, focused alternative, prior practice connected, or brief recap
+- [x] Optional edit and transfer reflection addressed — offered/declined/already covered/not applicable as appropriate
+- [x] `devpost/app-map.html` generated from finished code, checked, and shown, including a project-grounded practice to reuse
 
-Activity and evidence: 
-Route and stops: 
-Edit outcome: 
-Reflection: 
-Activity mode: 
+Activity and evidence: Prior practice connected. The learner's goal was separating the real MVP from nice-to-haves. The final verification already exercised it: ticked slices were checked against the running app, missing features were cut or disabled, and the healing wave was verified by clicking the real Cascade Sync path (see Revisions).
+Route and stops: Reference route only, not toured: Cascade Sync click (`index.html`, `$('pop-cascade').onclick`) → `server.mjs` `/api/cascade-sync` + `syncThenHeal` → `index.html` `updateColors`. Recorded in `devpost/app-map.html`.
+Edit outcome: Not applicable; the learner made real product decisions during the final review (disable Merge with a note, move ownership, add the syncing phase).
+Reflection: Answered; kept in the learner profile.
+Activity mode: Focused alternative (familiar plan-first user), connected to practice already completed.
 
 ## Revisions
 
+
+- Final verification (2026-10-26): server boots, `GET /` and `/api/mrs` return 200, SSE stream connects. Deviations found against the checked slices:
+  - Slice 3: no scenario switcher. The server has one demo stack (`SCENARIOS.default`) and the HUD has no switcher; `/api/scenario` only supports `reset`, and nothing in the UI calls it.
+  - Slice 4: no healing wave. `updateColors` in `index.html` hides cracks instantly when the SSE update arrives.
+  - The popover has a `Merge MR` button that POSTs to `/api/merge`, which the server doesn't implement (404), while the status bar still says "Merge launched". Merge isn't in the PRD's capsule (`Sync`, `Cascade Sync`, `Open in Repo`).
+  - `updateColors` still adds the red failed-pipeline outline that `render` no longer draws, so failed planets regain it after any live update.
+  - The spec says the browser opens automatically; the server only prints the URL.
+  - `openTerminal` in `server.mjs` escapes `\` and `"` but the command sits inside a single-quoted shell string, so a branch name with `'` breaks out of it.
+  - Once healed, the demo can only be reset by restarting the server.
+  - `COA-3439` replaced with the made-up `SOL-101` in spec and checklist before public release.
+- Resolved before submission (2026-10-26):
+  - Scenario switcher cut from the PoC; the single demo stack covers the core journey. `/api/scenario` `reset` stays server-side only.
+  - Merge MR button disabled with the tooltip "available once GitHub is connected"; its dead `/api/merge` handler removed.
+  - Healing wave built in `updateColors`: cracks and the failed alarm ring fade, and a gold ring expands from each healed planet, staggered by stack depth.
+  - Sync and Cascade Sync now mark the branches as syncing (cyan pulse) for `SYNC_MS` before healing, so the heal no longer looks instant.
+  - Fixed: a recovered failed-pipeline planet revealed its lava texture and turned pink; it now switches to the glow filter.
+  - Demo data: `feat/auth-core-service` is now the learner's branch so Cascade Sync runs from the base of the train; `docs/api-spec-v2` carries the "not yours" state.
+  - Added MIT `LICENSE` and a project README for the public repo.

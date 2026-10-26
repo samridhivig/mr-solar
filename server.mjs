@@ -40,7 +40,7 @@ const SCENARIOS = {
       changes_count: 1, // smaller purple node
       user_notes_count: 1,
       created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
-      foreign: true,
+      foreign: false,
       has_conflicts: true, // merge conflict cracks
       web_url: 'https://github.com/org/repo/pull/1040'
     },
@@ -100,7 +100,7 @@ const SCENARIOS = {
       changes_count: 2,
       user_notes_count: 0,
       created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
-      foreign: false,
+      foreign: true,
       has_conflicts: false,
       web_url: 'https://github.com/org/repo/pull/1035'
     },

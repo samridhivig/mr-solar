@@ -1,0 +1,14 @@
+{
+  "name": "mr-solar",
+  "version": "1.0.0",
+  "description": "MR Solar — 3D/Canvas Planetary visualization of stacked Merge Requests orbiting Production",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  },
+  "keywords": ["gitlab", "merge-requests", "git", "visualization", "solar-system", "d3", "canvas"],
+  "author": "Samridhi Vig",
+  "license": "MIT"
+}

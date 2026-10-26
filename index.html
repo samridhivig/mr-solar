@@ -1,0 +1,1993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MR Solar System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --space-bg:      #020410;
+      --electric-blue: #3b82f6;
+      --neon-cyan:     #22d3ee;
+      --neon-green:    #10b981;
+      --amber-sun:     #fbbf24;
+      --red-fail:      #dc2626;
+      --purple-foreign:#8b5cf6;
+      --text-primary:  #dde8ff;
+      --text-secondary:#8899bb;
+      --text-muted:    #3a4870;
+      --border-dim:    rgba(42, 53, 96, 0.6);
+      --border-bright: rgba(59, 130, 246, 0.3);
+      --glass-bg:      rgba(6, 8, 28, 0.88);
+      --glass-bg2:     rgba(8, 12, 36, 0.92);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--space-bg);
+      color: var(--text-primary);
+      font-family: 'Inter', -apple-system, sans-serif;
+    }
+
+    /* ── Star field canvas ────────────────────────────────────────────────── */
+    #stars-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Nebula gradients ─────────────────────────────────────────────────── */
+    .nebula {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(120px);
+      animation: nebula-drift 40s ease-in-out infinite alternate;
+    }
+    .nebula-1 {
+      width: 900px; height: 600px;
+      top: -200px; left: -200px;
+      background: radial-gradient(ellipse, rgba(59,130,246,0.07) 0%, transparent 70%);
+      animation-duration: 55s;
+    }
+    .nebula-2 {
+      width: 700px; height: 700px;
+      bottom: -250px; right: -150px;
+      background: radial-gradient(ellipse, rgba(139,92,246,0.06) 0%, transparent 70%);
+      animation-duration: 48s;
+      animation-direction: alternate-reverse;
+    }
+    .nebula-3 {
+      width: 500px; height: 400px;
+      top: 40%; left: 60%;
+      background: radial-gradient(ellipse, rgba(16,185,129,0.04) 0%, transparent 70%);
+      animation-duration: 62s;
+    }
+    @keyframes nebula-drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      33%  { transform: translate(30px, -20px) scale(1.05); }
+      66%  { transform: translate(-20px, 30px) scale(0.97); }
+      100% { transform: translate(15px, 10px) scale(1.02); }
+    }
+
+    /* ── SVG canvas ───────────────────────────────────────────────────────── */
+    #canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw; height: 100vh;
+      z-index: 1;
+    }
+
+    /* ── SVG node styles ──────────────────────────────────────────────────── */
+    .node { cursor: pointer; }
+    .node.master { cursor: default; }
+
+    .node-label {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      font-weight: 400;
+      fill: var(--text-muted);
+      transition: fill 0.2s;
+      pointer-events: none;
+      letter-spacing: 0.02em;
+    }
+    .node:hover .node-label { fill: var(--text-secondary); }
+    .node.selected .node-label { fill: var(--text-primary); }
+
+    /* Orbital ring track */
+    .orbital-ring {
+      fill: none;
+      stroke: rgba(59, 130, 246, 0.06);
+      stroke-width: 1;
+      stroke-dasharray: 4 8;
+      pointer-events: none;
+    }
+
+    /* Link styling */
+    .link-path {
+      fill: none;
+      stroke-opacity: 0.5;
+    }
+
+    /* Planet body */
+    .planet-body {
+      transition: filter 0.2s;
+    }
+
+    /* ── Tooltip ─────────────────────────────────────────────────────────── */
+    #tooltip {
+      --node-color: #4b7bbd; /* default steel-blue; overridden inline per-node */
+      position: fixed;
+      background: rgba(6, 8, 28, 0.72);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+      border: 1px solid rgba(42, 53, 96, 0.45);
+      border-radius: 12px;
+      padding: 14px 16px;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      max-width: 300px;
+      z-index: 300;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--node-color) 18%, transparent),
+        0 6px 24px rgba(0,0,0,0.45),
+        0 2px 6px rgba(0,0,0,0.3);
+    }
+    /* Top-edge shimmer: light catching the glass rim in the pipeline state colour */
+    #tooltip::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(
+        to right,
+        transparent 0%,
+        color-mix(in srgb, var(--node-color) 55%, transparent) 30%,
+        color-mix(in srgb, var(--node-color) 70%, transparent) 50%,
+        color-mix(in srgb, var(--node-color) 55%, transparent) 70%,
+        transparent 100%
+      );
+      pointer-events: none;
+    }
+    #tooltip.visible {
+      opacity: 0.9;
+      transform: translateY(0);
+    }
+    /* Suppress tooltip when its node's popover is open */
+    #tooltip.popover-active {
+      opacity: 0 !important;
+      pointer-events: none;
+    }
+
+    .tt-header {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .tt-iid {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--electric-blue);
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .tt-title {
+      font-size: 12px;
+      font-weight: 500;
+      /* no line-clamp — show full title */
+      color: var(--text-primary);
+      line-height: 1.4;
+    }
+    .tt-badges {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .tt-badge {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid;
+    }
+    .tt-badge.draft {
+      color: #6b7bb8;
+      border-color: rgba(107,123,184,0.3);
+      background: rgba(107,123,184,0.08);
+    }
+    .tt-badge.foreign {
+      color: var(--purple-foreign);
+      border-color: rgba(139,92,246,0.3);
+      background: rgba(139,92,246,0.08);
+    }
+    .tt-divider {
+      height: 1px;
+      background: var(--border-dim);
+      margin: 8px 0;
+    }
+    .tt-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .tt-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11.5px;
+    }
+    .tt-row-label {
+      color: var(--text-muted);
+      min-width: 58px;
+      font-size: 10.5px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .tt-row-value {
+      color: var(--text-secondary);
+    }
+    .tt-pipe-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .tt-pipe-dot.success { background: var(--neon-green); box-shadow: 0 0 6px var(--neon-green); }
+    .tt-pipe-dot.failed  { background: var(--red-fail);   box-shadow: 0 0 6px var(--red-fail); }
+    .tt-pipe-dot.running {
+      background: var(--electric-blue);
+      box-shadow: 0 0 6px var(--electric-blue);
+      animation: pulse-dot 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.75); }
+    }
+    .tt-ticket {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--neon-cyan);
+      opacity: 0.8;
+    }
+
+    /* ── Popover ─────────────────────────────────────────────────────────── */
+    #popover {
+      position: fixed;
+      background: var(--glass-bg2);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid var(--border-dim);
+      border-radius: 14px;
+      padding: 5px;
+      display: none;
+      gap: 3px;
+      align-items: center;
+      z-index: 400;
+      box-shadow:
+        0 0 0 1px rgba(59,130,246,0.1),
+        0 16px 48px rgba(0,0,0,0.7),
+        0 4px 16px rgba(0,0,0,0.5),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+      opacity: 0;
+      transform: scale(0.92) translateY(4px);
+      transition: opacity 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    #popover.visible {
+      display: flex;
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    #popover.was-visible {
+      display: flex;
+      opacity: 0;
+      transform: scale(0.92) translateY(4px);
+    }
+
+    .pop-btn {
+      width: 40px; height: 40px;
+      flex-shrink: 0;
+      border: none;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s, transform 0.12s;
+      text-decoration: none;
+      position: relative;
+      font-size: 17px;
+      line-height: 1;
+    }
+    .pop-btn:hover {
+      transform: scale(1.1);
+    }
+    .pop-btn:active {
+      transform: scale(0.95);
+    }
+    #pop-sync:hover    { background: rgba(59,130,246,0.15);  color: #93c5fd; }
+    #pop-cascade:hover { background: rgba(34,211,238,0.15); color: #67e8f9; }
+    #pop-merge:hover   { background: rgba(16,185,129,0.15);  color: #6ee7b7; }
+    #pop-gl:hover      { background: rgba(139,92,246,0.15);  color: #c4b5fd; }
+
+    /* Micro-tooltip on pop buttons */
+    .pop-btn::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--glass-bg2);
+      border: 1px solid var(--border-dim);
+      color: var(--text-secondary);
+      padding: 4px 9px;
+      border-radius: 6px;
+      font-family: 'Inter', sans-serif;
+      font-size: 10px;
+      font-weight: 500;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .pop-btn:hover::after { opacity: 1; }
+
+    .pop-divider {
+      width: 1px; height: 22px;
+      flex-shrink: 0;
+      background: var(--border-dim);
+      margin: 0 1px;
+    }
+
+    /* Pop button SVG icons */
+    .pop-icon { width: 18px; height: 18px; }
+
+    /* ── Legend ───────────────────────────────────────────────────────────── */
+    #legend {
+      position: fixed;
+      top: 20px; right: 20px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border-dim);
+      border-radius: 12px;
+      padding: 12px 14px;
+      z-index: 200;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      min-width: 140px;
+    }
+    .legend-title {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 9px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .legend-item:last-child { margin-bottom: 0; }
+    .legend-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .legend-dot.success { background: var(--neon-green); box-shadow: 0 0 8px rgba(16,185,129,0.6); }
+    .legend-dot.failed  {
+      background: radial-gradient(circle at 38% 35%, #dc2626 0%, #991b1b 45%, #450a0a 100%);
+      box-shadow: 0 0 10px rgba(220,38,38,0.7), 0 0 20px rgba(139,0,0,0.4);
+      animation: lava-pulse 3.1s ease-in-out infinite;
+    }
+    .legend-dot.running {
+      background: var(--electric-blue);
+      box-shadow: 0 0 8px rgba(59,130,246,0.6);
+      animation: pulse-dot 1.2s ease-in-out infinite;
+    }
+    .legend-dot.foreign { background: var(--purple-foreign); box-shadow: 0 0 8px rgba(139,92,246,0.5); }
+    .legend-dot.draft   { background: #334155; border: 1px solid #4b6070; }
+    .legend-ring {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      border: 2px solid var(--amber-sun);
+      flex-shrink: 0;
+      box-shadow: 0 0 8px rgba(251,191,36,0.4);
+    }
+    .legend-moon {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #c8d8f0;
+      opacity: 0.75;
+      flex-shrink: 0;
+      box-shadow: 0 0 4px rgba(200,216,240,0.5);
+    }
+    .legend-stale-ring {
+      width: 14px; height: 6px;
+      border-radius: 50%;
+      border: 1.5px solid #c8a96e;
+      opacity: 0.75;
+      flex-shrink: 0;
+      box-shadow: 0 0 6px rgba(200,169,110,0.4);
+    }
+
+    /* ── Status bar ───────────────────────────────────────────────────────── */
+    #status-bar {
+      position: fixed;
+      bottom: 20px; left: 20px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-dim);
+      border-radius: 9px;
+      padding: 7px 12px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: color 0.3s;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    #status-bar .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--neon-green);
+      box-shadow: 0 0 6px var(--neon-green);
+      animation: pulse-dot 2.5s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    #status-bar.loading .status-dot { background: var(--electric-blue); box-shadow: 0 0 6px var(--electric-blue); }
+    #status-bar.error .status-dot   { background: var(--red-fail);   box-shadow: 0 0 6px var(--red-fail); }
+
+    /* ── Refresh button ───────────────────────────────────────────────────── */
+    #refresh-btn {
+      position: fixed;
+      bottom: 20px; right: 20px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-dim);
+      color: var(--text-muted);
+      padding: 7px 14px 7px 10px;
+      border-radius: 9px;
+      font-size: 11px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.15s;
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      user-select: none;
+    }
+    #refresh-btn:hover {
+      color: var(--text-primary);
+      border-color: var(--border-bright);
+      background: rgba(59,130,246,0.08);
+    }
+    #refresh-btn:active { transform: scale(0.96); }
+    #refresh-btn svg { width: 14px; height: 14px; transition: transform 0.4s; }
+    #refresh-btn.spinning svg { transform: rotate(360deg); transition: transform 0.6s linear; }
+
+    /* ── Spinning ring for "running" pipeline ─────────────────────────────── */
+    @keyframes spin-cw  { to { transform: rotate(360deg);  } }
+    @keyframes spin-ccw { to { transform: rotate(-360deg); } }
+
+    .ring-running { animation: spin-cw 2.4s linear infinite; transform-origin: center center; }
+
+    /* ── Failed planet — ominous lava glow & alarm ring ──────────────────── */
+    @keyframes lava-pulse {
+      0%   { filter: drop-shadow(0 0 6px rgba(220,38,38,0.35)) drop-shadow(0 0 16px rgba(139,0,0,0.25)); }
+      18%  { filter: drop-shadow(0 0 14px rgba(220,38,38,0.75)) drop-shadow(0 0 28px rgba(180,20,20,0.55)); }
+      35%  { filter: drop-shadow(0 0 8px rgba(220,38,38,0.45)) drop-shadow(0 0 18px rgba(139,0,0,0.3)); }
+      55%  { filter: drop-shadow(0 0 18px rgba(239,68,68,0.85)) drop-shadow(0 0 34px rgba(200,30,30,0.6)); }
+      72%  { filter: drop-shadow(0 0 7px rgba(220,38,38,0.4)) drop-shadow(0 0 14px rgba(139,0,0,0.25)); }
+      100% { filter: drop-shadow(0 0 6px rgba(220,38,38,0.35)) drop-shadow(0 0 16px rgba(139,0,0,0.25)); }
+    }
+    .planet-body-failed {
+      animation: lava-pulse 3.1s ease-in-out infinite;
+    }
+
+    @keyframes alarm-ring {
+      0%   { stroke-opacity: 0.85; stroke-width: 2.5; }
+      12%  { stroke-opacity: 0.2;  stroke-width: 1.5; }
+      18%  { stroke-opacity: 0.9;  stroke-width: 3;   }
+      28%  { stroke-opacity: 0.3;  stroke-width: 1.5; }
+      36%  { stroke-opacity: 0.8;  stroke-width: 2.5; }
+      60%  { stroke-opacity: 0.75; stroke-width: 2.5; }
+      72%  { stroke-opacity: 0.15; stroke-width: 1;   }
+      78%  { stroke-opacity: 0.85; stroke-width: 2.5; }
+      100% { stroke-opacity: 0.85; stroke-width: 2.5; }
+    }
+    .ring-failed-alarm {
+      animation: alarm-ring 2.8s steps(1, end) infinite;
+      transform-origin: center center;
+    }
+
+    /* ── Sun corona animation ─────────────────────────────────────────────── */
+    @keyframes corona-pulse {
+      0%, 100% { opacity: 0.20; transform: scale(1); }
+      50%       { opacity: 0.55; transform: scale(1.06); }
+    }
+    .sun-corona {
+      animation: corona-pulse 18s ease-in-out infinite;
+      transform-origin: center center;
+    }
+    .sun-corona-2 {
+      animation: corona-pulse 24s ease-in-out infinite reverse;
+      animation-delay: -4s;
+      transform-origin: center center;
+    }
+
+    /* ── Shimmer on selected node ─────────────────────────────────────────── */
+    @keyframes selected-glow {
+      0%, 100% { opacity: 0.7; }
+      50%       { opacity: 1; }
+    }
+    .selected-ring {
+      animation: selected-glow 1.8s ease-in-out infinite;
+    }
+
+    /* ── Connection highlight fade ────────────────────────────────────────── */
+    .node-dimmed circle,
+    .node-dimmed .planet-body { opacity: 0.15; }
+    .node-dimmed .node-label  { opacity: 0.08; }
+    .link-dimmed { opacity: 0.06 !important; }
+    .link-highlighted { opacity: 1 !important; }
+    .node-highlighted .node-label { fill: var(--text-primary) !important; }
+
+    /* ── Dragging state ───────────────────────────────────────────────────── */
+    .node-dragging circle { filter: drop-shadow(0 0 20px rgba(59,130,246,0.5)) !important; }
+
+    /* ── Moon orbits ──────────────────────────────────────────────────────── */
+    @keyframes moon-orbit {
+      from { transform: rotate(var(--moon-start-angle)); }
+      to   { transform: rotate(calc(var(--moon-start-angle) + 360deg)); }
+    }
+    .moon-orbit-arm {
+      transform-origin: 0 0;
+      animation: moon-orbit 12s linear infinite;
+      pointer-events: none;
+    }
+    .moon-dot {
+      fill: rgba(220, 230, 255, 0.65);
+      pointer-events: none;
+    }
+
+    /* ── Saturn ring ──────────────────────────────────────────────────────── */
+    /* Oscillates scaleY(1) → scaleY(0.25) — never goes edge-on (flat line).
+       ease-in on the way down → rushes through the thin point;
+       ease-out on the way back → springs quickly to full width.
+       Net effect: ring lingers face-on, briefly dips to its shallowest tilt. */
+    @keyframes ring-orbit {
+      0%   { transform: scaleY(1);    animation-timing-function: ease-in;  }
+      50%  { transform: scaleY(0.25); animation-timing-function: ease-out; }
+      100% { transform: scaleY(1);    }
+    }
+    .saturn-ring {
+      pointer-events: none;
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: ring-orbit 30s linear infinite;
+    }
+
+    /* ── Merge conflict fracture lines ─────────────────────────────────────── */
+    @keyframes crack-pulse {
+      0%, 100% { stroke-opacity: 0.42; }
+      50%       { stroke-opacity: 0.95; }
+    }
+    .conflict-crack {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      pointer-events: none;
+      animation: crack-pulse 2.0s ease-in-out infinite;
+    }
+    /* Dark burnt sienna — legible on light planets, reads as heat on dark ones */
+    .conflict-crack-main   { stroke: #96320a; stroke-width: 1.5; }
+    .conflict-crack-branch { stroke: #6e2006; stroke-width: 0.85; }
+    .legend-crack-icon { flex-shrink: 0; }
+
+    /* ── Scrollbar ────────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body>
+
+<!-- Background layers -->
+<canvas id="stars-canvas"></canvas>
+<div class="nebula nebula-1"></div>
+<div class="nebula nebula-2"></div>
+<div class="nebula nebula-3"></div>
+
+<!-- Main D3 canvas -->
+<svg id="canvas"></svg>
+
+<!-- Tooltip -->
+<div id="tooltip"></div>
+
+<!-- Popover action buttons -->
+<div id="popover">
+  <button class="pop-btn" id="pop-sync" data-tip="Sync with parent">
+    <svg class="pop-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3.5 10c0-3.584 2.916-6.5 6.5-6.5 2.08 0 3.938.978 5.144 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M16.5 10c0 3.584-2.916 6.5-6.5 6.5-2.08 0-3.938-.978-5.144-2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M14.5 3.5 15.144 6 12.5 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5.5 16.5 4.856 14 7.5 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </button>
+  <button class="pop-btn" id="pop-cascade" data-tip="Cascade sync">
+    <svg class="pop-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="10" cy="3.5" r="1.5" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M10 5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M10 8 Q10 11 5.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <path d="M10 8 Q10 11 14.5 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <circle cx="5.5" cy="12.5" r="1.5" stroke="currentColor" stroke-width="1.5"/>
+      <circle cx="14.5" cy="12.5" r="1.5" stroke="currentColor" stroke-width="1.5"/>
+      <path d="M5.5 14v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M14.5 14v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <button class="pop-btn" id="pop-merge" data-tip="Merge MR">
+    <svg class="pop-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="5.5" cy="15" r="2" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="5.5" cy="5"  r="2" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="14.5" cy="8" r="2" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M5.5 7v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M5.5 7c0-0 3.5-1 6.5 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <div class="pop-divider"></div>
+  <a class="pop-btn" id="pop-gl" data-tip="Open in GitLab" target="_blank">
+    <svg class="pop-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 4H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M12 4h4v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M16 4 9 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+  </a>
+</div>
+
+<!-- Status bar -->
+<div id="status-bar" class="loading">
+  <span class="status-dot"></span>
+  <span id="status-text">Loading…</span>
+</div>
+
+<!-- Refresh button -->
+<button id="refresh-btn">
+  <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3.5 10c0-3.584 2.916-6.5 6.5-6.5 2.08 0 3.938.978 5.144 2.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+    <path d="M16.5 10c0 3.584-2.916 6.5-6.5 6.5-2.08 0-3.938-.978-5.144-2.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+    <path d="M14.5 3.5 15.144 6 12.5 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M5.5 16.5 4.856 14 7.5 14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  Refresh
+</button>
+
+<!-- Legend -->
+<div id="legend">
+  <div class="legend-title">Legend</div>
+  <div class="legend-item"><div class="legend-dot success"></div> Passing</div>
+  <div class="legend-item"><div class="legend-dot failed"></div> <span style="color:#dc2626">Pipeline failed</span></div>
+  <div class="legend-item"><div class="legend-dot running"></div> Running</div>
+  <div class="legend-item"><div class="legend-dot foreign"></div> Not yours</div>
+  <div class="legend-item"><div class="legend-dot draft"></div> Draft</div>
+  <div class="legend-item"><div class="legend-ring"></div> Sun (main)</div>
+  <div class="legend-item"><div class="legend-moon"></div> Review threads</div>
+  <div class="legend-item"><div class="legend-stale-ring"></div> Open &gt; 2 weeks</div>
+  <div class="legend-item">
+    <svg class="legend-crack-icon" width="16" height="10" viewBox="0 0 16 10">
+      <path d="M1,9 L5,4 L7,6 L11,1 L15,4" stroke="#96320a" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Merge conflict
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  Star field
+// ═══════════════════════════════════════════════════════════════════════════
+(function initStars() {
+  const canvas = document.getElementById('stars-canvas');
+  const ctx = canvas.getContext('2d');
+  let stars = [];
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    stars = [];
+    const n = Math.floor((canvas.width * canvas.height) / 3800);
+    for (let i = 0; i < n; i++) {
+      stars.push({
+        x:       Math.random() * canvas.width,
+        y:       Math.random() * canvas.height,
+        r:       Math.random() * 1.2 + 0.2,
+        opacity: Math.random() * 0.7 + 0.1,
+        twinkle: Math.random() * Math.PI * 2,
+        speed:   Math.random() * 0.008 + 0.003,
+      });
+    }
+  }
+
+  function draw(t) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const s of stars) {
+      s.twinkle += s.speed;
+      const alpha = s.opacity * (0.6 + 0.4 * Math.sin(s.twinkle));
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(180, 200, 255, ${alpha})`;
+      ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(draw);
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Utilities
+// ═══════════════════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const tooltip   = $('tooltip');
+const popover   = $('popover');
+const statusBar = $('status-bar');
+const statusTxt = $('status-text');
+
+let selectedNode   = null;
+let simulation, nodeG, linkG;
+let currentTransform = d3.zoomIdentity;
+let svgG; // the transform group
+
+// Color palette
+const COLORS = {
+  success:       '#4b7bbd',   // icy celestial steel-blue from original design
+  failed:        '#7f1d1d',   // dark blood-red base for planet body
+  failedHighlight: '#dc2626', // volcanic highlight for gradient top
+  running:       '#3b82f6',   // electric blue
+  foreign:       '#8b5cf6',   // purple
+  draft:         '#334155',   // slate-700
+  sun:           '#fbbf24',   // solar amber
+  default:       '#4b7bbd',   // steel blue
+};
+
+function nodeColor(d) {
+  if (d.type === 'master') return COLORS.sun;
+  if (d.foreign) return COLORS.foreign;
+  if (d.draft)   return COLORS.draft;
+  return COLORS.default;
+}
+
+// Radius scale calibrated from 50 real merged MRs (samridhi@, Apr 2026):
+//   min=1, p25=2, p50=4, p75=6, p90=10, max=29 — almost all MRs are 1–13 files.
+//   Old formula (offset 14, k=1.6) only spanned px 15–23, producing no visible size difference.
+//   New formula anchors at 12px (1-file MR), hits ~24px at p75 (6 files),
+//   and clamps at 36px for large outliers. Ratio max/min ≈ 2.1×.
+function nodeRadius(d) {
+  if (d.type === 'master') return 38;
+  return Math.max(12, Math.min(36, 12 + Math.sqrt(d.changes ?? 0) * 4.9));
+}
+
+function nodeBorderColor(d) {
+  if (d.pipeline === 'success') return COLORS.success;
+  if (d.pipeline === 'failed')  return COLORS.failedHighlight;  // crimson for glow/rings
+  if (d.pipeline === 'running') return COLORS.running;
+  if (d.foreign) return COLORS.foreign;
+  return 'rgba(42,53,96,0.6)';
+}
+
+function setStatus(text, state = 'idle') {
+  statusTxt.textContent = text;
+  statusBar.className = state;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Popover
+// ═══════════════════════════════════════════════════════════════════════════
+function showPopover(d) {
+  selectedNode = d;
+
+  const [sx, sy] = currentTransform.apply([d.x, d.y]);
+  const r = nodeRadius(d) * currentTransform.k;
+
+  const OFFSET = 10;
+
+  $('pop-sync').style.display    = d.foreign ? 'none' : 'flex';
+  $('pop-cascade').style.display = d.foreign ? 'none' : 'flex';
+  $('pop-merge').style.display   = d.foreign ? 'none' : 'flex';
+  popover.querySelector('.pop-divider').style.display = d.foreign ? 'none' : 'block';
+  $('pop-gl').href = d.web_url;
+
+  // Make visible first so we can measure the real rendered width/height
+  popover.classList.remove('was-visible');
+  popover.classList.add('visible');
+
+  const PW = popover.offsetWidth;
+  const PH = popover.offsetHeight;
+
+  // Prefer above the node; flip below if near the top edge.
+  let top = sy - r - OFFSET - PH;
+  if (top < 8) top = sy + r + OFFSET;
+  top = Math.max(8, Math.min(top, window.innerHeight - PH - 8));
+
+  // Horizontal: center on the node; clamp to viewport edges.
+  let left = sx - PW / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - PW - 8));
+
+  popover.style.left = `${left}px`;
+  popover.style.top  = `${top}px`;
+
+  // Hide tooltip and mark it suppressed while the popover is open
+  tooltip.classList.remove('visible');
+  tooltip.classList.add('popover-active');
+
+  // Highlight selected node
+  if (nodeG) {
+    nodeG.classed('selected', nd => nd.id === d.id);
+    // Reset all selected-rings, then show only this node's
+    nodeG.selectAll('.selected-ring')
+      .attr('stroke-opacity', 0)
+      .attr('display', 'none');
+    nodeG.filter(nd => nd.id === d.id).select('.selected-ring')
+      .attr('display', null)
+      .attr('stroke-opacity', 0.8);
+  }
+}
+
+function hidePopover() {
+  if (popover.classList.contains('visible')) {
+    popover.classList.remove('visible');
+    popover.classList.add('was-visible');
+    setTimeout(() => popover.classList.remove('was-visible'), 200);
+  }
+  // Lift the tooltip suppression
+  tooltip.classList.remove('popover-active');
+  selectedNode = null;
+  if (nodeG) {
+    nodeG.classed('selected', false);
+    // Hide all selected-rings
+    nodeG.selectAll('.selected-ring')
+      .attr('stroke-opacity', 0)
+      .attr('display', 'none');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Main render
+// ═══════════════════════════════════════════════════════════════════════════
+function render(graph) {
+  const svg = d3.select('#canvas');
+  svg.selectAll('*').remove();
+  hidePopover();
+
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+
+  const master = graph.nodes.find(n => n.type === 'master');
+  if (master) { master.fx = W / 2; master.fy = H / 2; }
+
+  // ── SVG defs (gradients, filters, markers) ───────────────────────────────
+  const defs = svg.append('defs');
+
+  // Sun radial gradient — hot white core shading to deep orange limb
+  const sunGrad = defs.append('radialGradient')
+    .attr('id', 'sunGrad')
+    .attr('cx', '45%').attr('cy', '38%').attr('r', '65%');
+  sunGrad.append('stop').attr('offset', '0%').attr('stop-color', '#fffde0');
+  sunGrad.append('stop').attr('offset', '25%').attr('stop-color', '#fde68a');
+  sunGrad.append('stop').attr('offset', '55%').attr('stop-color', '#fbbf24');
+  sunGrad.append('stop').attr('offset', '80%').attr('stop-color', '#f97316');
+  sunGrad.append('stop').attr('offset', '100%').attr('stop-color', '#b45309').attr('stop-opacity', '0.85');
+
+  // Sun surface texture filter — slow granular convection cells
+  const sunTex = defs.append('filter')
+    .attr('id', 'sunTex')
+    .attr('x', '-5%').attr('y', '-5%').attr('width', '110%').attr('height', '110%')
+    .attr('color-interpolation-filters', 'sRGB');
+  // Low-frequency turbulence mimics solar granulation / convection cells
+  sunTex.append('feTurbulence')
+    .attr('type', 'fractalNoise')
+    .attr('baseFrequency', '0.045 0.045')
+    .attr('numOctaves', 4)
+    .attr('seed', 7)
+    .attr('result', 'noise');
+  sunTex.append('feColorMatrix')
+    .attr('in', 'noise').attr('type', 'saturate').attr('values', '0')
+    .attr('result', 'grey');
+  // Keep it mostly light — we screen over the base, slightly brightening hot spots
+  sunTex.append('feComponentTransfer')
+    .attr('in', 'grey').attr('result', 'granules')
+    .call(ft => {
+      ft.append('feFuncR').attr('type', 'linear').attr('slope', '0.35').attr('intercept', '0.55');
+      ft.append('feFuncG').attr('type', 'linear').attr('slope', '0.28').attr('intercept', '0.48');
+      ft.append('feFuncB').attr('type', 'linear').attr('slope', '0.12').attr('intercept', '0.20');
+    });
+  sunTex.append('feBlend')
+    .attr('in', 'SourceGraphic').attr('in2', 'granules').attr('mode', 'screen')
+    .attr('result', 'textured');
+  // Clip to the original shape
+  sunTex.append('feComposite')
+    .attr('in', 'textured').attr('in2', 'SourceGraphic').attr('operator', 'in');
+
+  // Glow filter for sun — more dramatic than planets; two-pass blur merge
+  const sunFilter = defs.append('filter').attr('id', 'sunGlow')
+    .attr('x', '-120%').attr('y', '-120%').attr('width', '440%').attr('height', '440%');
+  sunFilter.append('feGaussianBlur').attr('in', 'SourceGraphic').attr('stdDeviation', '18').attr('result', 'blurBig');
+  sunFilter.append('feGaussianBlur').attr('in', 'SourceGraphic').attr('stdDeviation', '7').attr('result', 'blurSharp');
+  const sfMerge = sunFilter.append('feMerge');
+  sfMerge.append('feMergeNode').attr('in', 'blurBig');
+  sfMerge.append('feMergeNode').attr('in', 'blurSharp');
+  sfMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  // Glow filter for planets
+  const planetFilter = defs.append('filter').attr('id', 'planetGlow').attr('x', '-60%').attr('y', '-60%').attr('width', '320%').attr('height', '320%');
+  planetFilter.append('feGaussianBlur').attr('in', 'SourceGraphic').attr('stdDeviation', '6').attr('result', 'blur');
+  const pMerge = planetFilter.append('feMerge');
+  pMerge.append('feMergeNode').attr('in', 'blur');
+  pMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  // Soft glow for selected
+  const selFilter = defs.append('filter').attr('id', 'selGlow').attr('x', '-80%').attr('y', '-80%').attr('width', '360%').attr('height', '360%');
+  selFilter.append('feGaussianBlur').attr('in', 'SourceGraphic').attr('stdDeviation', '10').attr('result', 'blur');
+  const selMerge = selFilter.append('feMerge');
+  selMerge.append('feMergeNode').attr('in', 'blur');
+  selMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  // ── Planet texture filters — 4 distinct variants keyed by iid % 4 ────────
+  //  0 = rocky    (high-freq turbulence, sharp contrast, displacement map)
+  //  1 = gaseous  (low-freq fractalNoise, soft bands, gentle blend)
+  //  2 = icy      (medium-freq fractalNoise, blue-tinted highlight, feComposite screen)
+  //  3 = volcanic (turbulence + displacement, heavy darkening at edges)
+  //
+  // Each filter blends over the base color (multiply/screen), never replaces it.
+  // The same MR always gets the same texture because seed = iid % 999.
+
+  // Build the 4 shared filter templates in defs, then assign each MR node
+  // a per-node filter that references its gradient — we do this by creating
+  // a per-node filter so the feTurbulence seed can vary per planet.
+
+  graph.nodes.filter(n => n.type === 'mr').forEach(d => {
+    const iid    = d.iid ?? 1;
+    const variant = iid % 4;              // 0 rocky | 1 gaseous | 2 icy | 3 volcanic
+    const seed    = iid % 999 || 1;       // turbulence seed — unique per MR
+    const fid     = `ptex_${d.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+    const filter = defs.append('filter')
+      .attr('id', fid)
+      .attr('x', '-15%').attr('y', '-15%')
+      .attr('width', '130%').attr('height', '130%')
+      .attr('color-interpolation-filters', 'sRGB');
+
+    // ── Failed planets always get the lava texture regardless of variant ──
+    if (d.pipeline === 'failed') {
+      // High-contrast turbulence: glowing lava cracks on a dark volcanic surface.
+      // Two noise passes — one for coarse flow channels, one for fine surface cracks.
+      filter.append('feTurbulence')
+        .attr('type', 'turbulence')
+        .attr('baseFrequency', '0.18 0.22')
+        .attr('numOctaves', 5)
+        .attr('seed', seed)
+        .attr('result', 'lavaBase');
+      // Fine-grain crackle over the top
+      filter.append('feTurbulence')
+        .attr('type', 'fractalNoise')
+        .attr('baseFrequency', '0.42 0.38')
+        .attr('numOctaves', 3)
+        .attr('seed', (seed + 17) % 999 || 1)
+        .attr('result', 'lavaCrack');
+      // Blend the two noise passes together — arithmetic composite
+      filter.append('feBlend')
+        .attr('in', 'lavaBase').attr('in2', 'lavaCrack').attr('mode', 'multiply')
+        .attr('result', 'combinedNoise');
+      // Tint: push reds/oranges, kill blue — lava colour palette
+      filter.append('feColorMatrix')
+        .attr('in', 'combinedNoise')
+        .attr('type', 'matrix')
+        // R    G     B     A   const
+        .attr('values', '1.4  0.1  0     0  -0.1  ' +  // R: emphasise, pull from G/B
+                        '0.4  0.05 0     0  -0.05 ' +  // G: faint orange glow
+                        '0    0    0     0   0     ' +  // B: zero
+                        '0    0    0     1   0')
+        .attr('result', 'tinted');
+      // High gamma to make cracks pop: bright lava lines on near-black rock
+      filter.append('feComponentTransfer')
+        .attr('in', 'tinted').attr('result', 'cracked')
+        .call(ft => {
+          ft.append('feFuncR').attr('type', 'gamma').attr('amplitude', '1.2').attr('exponent', '0.6').attr('offset', '0');
+          ft.append('feFuncG').attr('type', 'gamma').attr('amplitude', '0.5').attr('exponent', '1.8').attr('offset', '0');
+          ft.append('feFuncB').attr('type', 'linear').attr('slope', '0').attr('intercept', '0');
+        });
+      // Screen blend: bright lava patches glow on top of the dark planet base
+      filter.append('feBlend')
+        .attr('in', 'SourceGraphic').attr('in2', 'cracked').attr('mode', 'screen')
+        .attr('result', 'textured');
+      filter.append('feComposite')
+        .attr('in', 'textured').attr('in2', 'SourceGraphic').attr('operator', 'in');
+      return; // skip the standard variant logic below
+    }
+
+    if (variant === 0) {
+      // ── Rocky: sharp high-frequency turbulence + displacement for cratered feel
+      filter.append('feTurbulence')
+        .attr('type', 'turbulence')
+        .attr('baseFrequency', '0.28 0.32')
+        .attr('numOctaves', 5)
+        .attr('seed', seed)
+        .attr('result', 'noise');
+      filter.append('feColorMatrix')
+        .attr('in', 'noise').attr('type', 'saturate').attr('values', '0')
+        .attr('result', 'grey');
+      filter.append('feComponentTransfer')
+        .attr('in', 'grey').attr('result', 'normed')
+        .call(ft => {
+          ft.append('feFuncR').attr('type', 'linear').attr('slope', '0.7').attr('intercept', '0.15');
+          ft.append('feFuncG').attr('type', 'linear').attr('slope', '0.7').attr('intercept', '0.15');
+          ft.append('feFuncB').attr('type', 'linear').attr('slope', '0.7').attr('intercept', '0.15');
+        });
+      // displace the source slightly to give a rough, cratered silhouette feel
+      filter.append('feDisplacementMap')
+        .attr('in', 'SourceGraphic').attr('in2', 'grey')
+        .attr('scale', 3).attr('xChannelSelector', 'R').attr('yChannelSelector', 'G')
+        .attr('result', 'displaced');
+      filter.append('feBlend')
+        .attr('in', 'displaced').attr('in2', 'normed').attr('mode', 'multiply')
+        .attr('result', 'textured');
+      filter.append('feComposite')
+        .attr('in', 'textured').attr('in2', 'SourceGraphic').attr('operator', 'in');
+
+    } else if (variant === 1) {
+      // ── Gaseous: low-frequency fractalNoise for soft cloud bands
+      filter.append('feTurbulence')
+        .attr('type', 'fractalNoise')
+        .attr('baseFrequency', '0.06 0.18')
+        .attr('numOctaves', 3)
+        .attr('seed', seed)
+        .attr('result', 'noise');
+      filter.append('feColorMatrix')
+        .attr('in', 'noise').attr('type', 'saturate').attr('values', '0')
+        .attr('result', 'grey');
+      // Softer brightness range for gaseous feel — less contrast
+      filter.append('feComponentTransfer')
+        .attr('in', 'grey').attr('result', 'normed')
+        .call(ft => {
+          ft.append('feFuncR').attr('type', 'linear').attr('slope', '0.4').attr('intercept', '0.30');
+          ft.append('feFuncG').attr('type', 'linear').attr('slope', '0.4').attr('intercept', '0.30');
+          ft.append('feFuncB').attr('type', 'linear').attr('slope', '0.4').attr('intercept', '0.30');
+        });
+      filter.append('feBlend')
+        .attr('in', 'SourceGraphic').attr('in2', 'normed').attr('mode', 'multiply')
+        .attr('result', 'textured');
+      filter.append('feComposite')
+        .attr('in', 'textured').attr('in2', 'SourceGraphic').attr('operator', 'in');
+
+    } else if (variant === 2) {
+      // ── Icy: medium-freq fractalNoise, brighten highlights with screen blend
+      filter.append('feTurbulence')
+        .attr('type', 'fractalNoise')
+        .attr('baseFrequency', '0.14 0.14')
+        .attr('numOctaves', 4)
+        .attr('seed', seed)
+        .attr('result', 'noise');
+      filter.append('feColorMatrix')
+        .attr('in', 'noise').attr('type', 'saturate').attr('values', '0')
+        .attr('result', 'grey');
+      // High intercept → most of the noise is light-ish, giving sparkle
+      filter.append('feComponentTransfer')
+        .attr('in', 'grey').attr('result', 'bright')
+        .call(ft => {
+          ft.append('feFuncR').attr('type', 'linear').attr('slope', '0.45').attr('intercept', '0.42');
+          ft.append('feFuncG').attr('type', 'linear').attr('slope', '0.45').attr('intercept', '0.45');
+          ft.append('feFuncB').attr('type', 'linear').attr('slope', '0.45').attr('intercept', '0.50');
+        });
+      // Screen blends lighter highlights on top of the planet color
+      filter.append('feBlend')
+        .attr('in', 'SourceGraphic').attr('in2', 'bright').attr('mode', 'screen')
+        .attr('result', 'screened');
+      filter.append('feComposite')
+        .attr('in', 'screened').attr('in2', 'SourceGraphic').attr('operator', 'in');
+
+    } else {
+      // ── Volcanic (variant === 3): turbulence + heavy contrast for dark, lava-veined look
+      filter.append('feTurbulence')
+        .attr('type', 'turbulence')
+        .attr('baseFrequency', '0.20 0.20')
+        .attr('numOctaves', 4)
+        .attr('seed', seed)
+        .attr('result', 'noise');
+      filter.append('feColorMatrix')
+        .attr('in', 'noise').attr('type', 'saturate').attr('values', '0')
+        .attr('result', 'grey');
+      // Low intercept → most noise is dark, lava veins appear as slightly lighter lines
+      filter.append('feComponentTransfer')
+        .attr('in', 'grey').attr('result', 'darkened')
+        .call(ft => {
+          ft.append('feFuncR').attr('type', 'gamma').attr('amplitude', '0.8').attr('exponent', '2.2').attr('offset', '0.05');
+          ft.append('feFuncG').attr('type', 'gamma').attr('amplitude', '0.6').attr('exponent', '2.5').attr('offset', '0.02');
+          ft.append('feFuncB').attr('type', 'gamma').attr('amplitude', '0.5').attr('exponent', '2.8').attr('offset', '0.01');
+        });
+      filter.append('feBlend')
+        .attr('in', 'SourceGraphic').attr('in2', 'darkened').attr('mode', 'multiply')
+        .attr('result', 'textured');
+      filter.append('feComposite')
+        .attr('in', 'textured').attr('in2', 'SourceGraphic').attr('operator', 'in');
+    }
+  });
+
+  // Planet body gradient (per color) — built dynamically below
+  // Link arrow marker
+  defs.append('marker')
+    .attr('id', 'arrow')
+    .attr('viewBox', '0 -4 8 8')
+    .attr('refX', 7).attr('refY', 0)
+    .attr('markerWidth', 5).attr('markerHeight', 5)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,-3L8,0L0,3')
+    .attr('fill', 'rgba(59,130,246,0.3)');
+
+  // ── Orbital rings (concentric, centered on master) ─────────────────────
+  const depths = [...new Set(graph.nodes.filter(n => n.type === 'mr').map(n => n.depth ?? 1))].sort();
+  const orbitalG = svg.append('g').attr('class', 'orbital-rings');
+  // We'll position rings after first tick, or just draw them now at W/2,H/2
+  // and keep them centered — they're cosmetic
+  depths.forEach(dep => {
+    const r = dep * 170 + 10;
+    orbitalG.append('circle')
+      .attr('class', 'orbital-ring')
+      .attr('cx', W / 2).attr('cy', H / 2)
+      .attr('r', r);
+  });
+
+  svgG = svg.append('g');
+
+  // ── Links ─────────────────────────────────────────────────────────────
+  const LINK_DASH = 6;
+  const LINK_GAP  = 5;
+  const LINK_LEN  = LINK_DASH + LINK_GAP;
+
+  linkG = svgG.selectAll('.link-group')
+    .data(graph.links)
+    .join('g')
+    .attr('class', 'link-group');
+
+  // Background glow path
+  linkG.append('path')
+    .attr('class', 'link-path link-bg')
+    .attr('stroke', 'rgba(59,130,246,0.08)')
+    .attr('stroke-width', 3);
+
+  // Animated dashed path
+  const linkPaths = linkG.append('path')
+    .attr('class', 'link-path link-dash')
+    .attr('stroke', 'rgba(59,130,246,0.25)')
+    .attr('stroke-width', 1.5)
+    .attr('stroke-dasharray', `${LINK_DASH} ${LINK_GAP}`);
+
+  // Animate the dashoffset to create travelling dots effect
+  linkPaths.each(function() {
+    const el = this;
+    let offset = 0;
+    (function animate() {
+      offset -= 0.25;
+      el.setAttribute('stroke-dashoffset', offset);
+      requestAnimationFrame(animate);
+    })();
+  });
+
+  // ── Nodes ─────────────────────────────────────────────────────────────
+  nodeG = svgG.selectAll('.node')
+    .data(graph.nodes)
+    .join('g')
+    .attr('class', d => `node ${d.type}`)
+    .call(
+      d3.drag()
+        .on('start', (e, d) => {
+          if (d.type === 'master') return;
+          hidePopover();
+          d3.select(e.sourceEvent.target.closest('.node')).classed('node-dragging', true);
+          if (!e.active) simulation.alphaTarget(0.3).restart();
+          d.fx = d.x; d.fy = d.y;
+        })
+        .on('drag', (e, d) => {
+          if (d.type === 'master') return;
+          d.fx = e.x; d.fy = e.y;
+        })
+        .on('end', (e, d) => {
+          if (d.type === 'master') return;
+          d3.select(e.sourceEvent.target.closest('.node')).classed('node-dragging', false);
+          if (!e.active) simulation.alphaTarget(0);
+          d.fx = null; d.fy = null;
+        })
+    );
+
+  // ── Sun corona gradients (in defs) ───────────────────────────────────────
+  const coronaOuter = defs.append('radialGradient')
+    .attr('id', 'coronaOuter').attr('cx', '50%').attr('cy', '50%').attr('r', '50%');
+  coronaOuter.append('stop').attr('offset', '35%').attr('stop-color', '#fbbf24').attr('stop-opacity', '0');
+  coronaOuter.append('stop').attr('offset', '75%').attr('stop-color', '#fbbf24').attr('stop-opacity', '0.18');
+  coronaOuter.append('stop').attr('offset', '100%').attr('stop-color', '#f97316').attr('stop-opacity', '0');
+
+  const coronaMid = defs.append('radialGradient')
+    .attr('id', 'coronaMid').attr('cx', '50%').attr('cy', '50%').attr('r', '50%');
+  coronaMid.append('stop').attr('offset', '45%').attr('stop-color', '#fbbf24').attr('stop-opacity', '0');
+  coronaMid.append('stop').attr('offset', '85%').attr('stop-color', '#fbbf24').attr('stop-opacity', '0.32');
+  coronaMid.append('stop').attr('offset', '100%').attr('stop-color', '#f97316').attr('stop-opacity', '0');
+
+  const coronaInner = defs.append('radialGradient')
+    .attr('id', 'coronaInner').attr('cx', '50%').attr('cy', '50%').attr('r', '50%');
+  coronaInner.append('stop').attr('offset', '55%').attr('stop-color', '#fffde0').attr('stop-opacity', '0');
+  coronaInner.append('stop').attr('offset', '90%').attr('stop-color', '#fde68a').attr('stop-opacity', '0.45');
+  coronaInner.append('stop').attr('offset', '100%').attr('stop-color', '#fbbf24').attr('stop-opacity', '0');
+
+  // ── Sun ───────────────────────────────────────────────────────────────
+  const sunNodes = nodeG.filter(d => d.type === 'master');
+
+  // Outermost corona — slow pulse
+  sunNodes.append('circle')
+    .attr('class', 'sun-corona')
+    .attr('r', 62)
+    .style('fill', 'url(#coronaOuter)');
+
+  // Mid corona — tighter, counter-pulse
+  sunNodes.append('circle')
+    .attr('class', 'sun-corona-2')
+    .attr('r', 52)
+    .style('fill', 'url(#coronaMid)');
+
+  // Inner halo — bright, tight, same pulse as outer
+  sunNodes.append('circle')
+    .attr('class', 'sun-corona')
+    .attr('r', 44)
+    .style('fill', 'url(#coronaInner)')
+    .style('animation-duration', '2.8s');
+
+  // Sun body — base gradient
+  sunNodes.append('circle')
+    .attr('r', 38)
+    .attr('fill', 'url(#sunGrad)')
+    .style('filter', 'url(#sunGlow)');
+
+  // Sun surface texture — blended over the body
+  sunNodes.append('circle')
+    .attr('r', 38)
+    .attr('fill', 'url(#sunGrad)')
+    .style('filter', 'url(#sunTex)')
+    .attr('opacity', 0.72);
+
+  // Sun label
+  sunNodes.append('text')
+    .attr('class', 'node-label')
+    .attr('dy', 38 + 16)
+    .attr('text-anchor', 'middle')
+    .attr('fill', 'rgba(251,191,36,0.55)')
+    .attr('font-size', 11)
+    .attr('font-family', "'JetBrains Mono', monospace")
+    .text('main');
+
+  // ── Planets (MR nodes) ────────────────────────────────────────────────
+  const mrNodes = nodeG.filter(d => d.type === 'mr');
+
+  // Outer glow (dimmed by default, lit on hover/select)
+  mrNodes.append('circle')
+    .attr('class', 'planet-glow')
+    .attr('r', d => nodeRadius(d) + 8)
+    .attr('fill', 'none')
+    .attr('stroke', d => nodeColor(d))
+    .attr('stroke-width', 0)
+    .attr('opacity', 0)
+    .style('filter', 'blur(6px)');
+
+  // Pipeline ring (behind body)
+  mrNodes.each(function(d) {
+    const g = d3.select(this);
+    const r = nodeRadius(d);
+    const col = nodeBorderColor(d);
+
+    if (d.pipeline === 'running') {
+      // Spinning dashed ring
+      g.append('circle')
+        .attr('class', 'ring-running')
+        .attr('r', r + 4)
+        .attr('fill', 'none')
+        .attr('stroke', col)
+        .attr('stroke-width', 2)
+        .attr('stroke-dasharray', `${(r + 4) * 0.6 * Math.PI} ${(r + 4) * 1.4 * Math.PI}`);
+    } else if (d.pipeline === 'failed') {
+      // Ominous alarm ring: wider, deeper red, stuttering pulse animation
+      g.append('circle')
+        .attr('class', 'ring-failed-alarm')
+        .attr('r', r + 4)
+        .attr('fill', 'none')
+        .attr('stroke', '#991b1b')
+        .attr('stroke-width', 2.5)
+        .attr('stroke-opacity', 0.85);
+      // Outer halo ring for extra menace
+      g.append('circle')
+        .attr('r', r + 7)
+        .attr('fill', 'none')
+        .attr('stroke', '#7f1d1d')
+        .attr('stroke-width', 1)
+        .attr('stroke-opacity', 0.35);
+    }
+  });
+
+  // ── Saturn rings (stale MRs — open > 2 weeks)
+  const STALE_MS = 14 * 24 * 60 * 60 * 1000;
+  const staleMrNodes = mrNodes.filter(d => d.createdAt && (Date.now() - new Date(d.createdAt)) > STALE_MS);
+
+  // Register a clipPath per stale node for the front-arc pass (upper half only).
+  // Covers from top of widest ring down to y=0 (planet equator).
+  staleMrNodes.each(function(d) {
+    const r      = nodeRadius(d);
+    const rx_max = r + 34;  // outermost dust ring rx + buffer
+    const ry     = Math.max(5, r * 0.28);
+    const cid    = `saturn-clip-${d.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    defs.append('clipPath')
+      .attr('id', cid)
+      .append('rect')
+        .attr('x', -rx_max)
+        .attr('y', -(ry + r + 4))
+        .attr('width', rx_max * 2)
+        .attr('height', ry + r + 4);
+  });
+
+  // Back-arc pass — drawn BEFORE planet body so planet occludes the back half
+  staleMrNodes.each(function(d) {
+    const g  = d3.select(this);
+    const r  = nodeRadius(d);
+    const ry = Math.max(5, r * 0.28);
+
+    // C ring — inner crepe, dusty dark ochre, very sparse
+    g.append('ellipse')
+      .attr('class', 'saturn-ring saturn-ring-c')
+      .attr('rx', r + 4).attr('ry', ry * 0.85)
+      .attr('fill', 'none')
+      .attr('stroke', '#4a3824')
+      .attr('stroke-width', 1.5)
+      .attr('stroke-opacity', 0.22);
+
+    // B ring — main bright band, icy white, dense; the hero ring
+    g.append('ellipse')
+      .attr('class', 'saturn-ring saturn-ring-b')
+      .attr('rx', r + 13).attr('ry', ry)
+      .attr('fill', 'none')
+      .attr('stroke', '#ede5b5')
+      .attr('stroke-width', 4.5)
+      .attr('stroke-opacity', 0.38);
+
+    // A ring — outer, warm gold, medium density
+    g.append('ellipse')
+      .attr('class', 'saturn-ring saturn-ring-a')
+      .attr('rx', r + 23).attr('ry', ry * 0.95)
+      .attr('fill', 'none')
+      .attr('stroke', '#c8a84e')
+      .attr('stroke-width', 2.5)
+      .attr('stroke-opacity', 0.28);
+
+    // Dust ring — outermost wisp, barely there
+    g.append('ellipse')
+      .attr('class', 'saturn-ring saturn-ring-dust')
+      .attr('rx', r + 30).attr('ry', ry * 0.88)
+      .attr('fill', 'none')
+      .attr('stroke', '#8a7040')
+      .attr('stroke-width', 1)
+      .attr('stroke-opacity', 0.14);
+  });
+
+  // Planet body
+  mrNodes.each(function(d) {
+    const g     = d3.select(this);
+    const r     = nodeRadius(d);
+    const color = nodeColor(d);
+    const isFailed = d.pipeline === 'failed';
+
+    // Build a radial gradient for this planet
+    const gid = `pg_${d.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const pg = defs.append('radialGradient')
+      .attr('id', gid)
+      .attr('cx', '38%').attr('cy', '32%').attr('r', '65%');
+
+    // Standard gradient: lighten for highlight, darken for shadow
+    pg.append('stop').attr('offset', '0%').attr('stop-color', lighten(color, 0.55));
+    pg.append('stop').attr('offset', '45%').attr('stop-color', color);
+    pg.append('stop').attr('offset', '100%').attr('stop-color', darken(color, 0.45));
+
+    const texId = `ptex_${d.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    // Combine texture and glow filters if pipeline active
+    const filterVal = d.pipeline
+      ? `url(#${texId}) url(#planetGlow)`
+      : `url(#${texId})`;
+
+    const bodyEl = g.append('circle')
+      .attr('class', isFailed ? 'planet-body planet-body-failed' : 'planet-body')
+      .attr('r', r)
+      .attr('fill', `url(#${gid})`)
+      .attr('stroke', darken(color, 0.3))
+      .attr('stroke-width', 1)
+      .attr('stroke-opacity', 0.5)
+      .style('filter', filterVal);
+  });
+
+  // Specular highlight (small inner shine)
+  mrNodes.append('ellipse')
+    .attr('class', 'planet-shine')
+    .attr('rx', d => nodeRadius(d) * 0.3)
+    .attr('ry', d => nodeRadius(d) * 0.2)
+    .attr('cx', d => -nodeRadius(d) * 0.22)
+    .attr('cy', d => -nodeRadius(d) * 0.25)
+    .attr('fill', 'rgba(255,255,255,0.18)')
+    .attr('opacity', d => d.draft ? 0.06 : 1);
+
+  // ── Merge conflict fracture lines ───────────────────────────────────────
+  // Impact-fracture pattern: 3 cracks radiate outward from a central hotspot.
+  // Each crack has a wide glow halo rendered beneath the bright crack line.
+  // Paths are deterministic per MR (seeded by iid) — stable across reloads.
+  mrNodes.filter(d => d.conflicts).each(function(d) {
+    const g   = d3.select(this);
+    const r   = nodeRadius(d);
+    const cid = `conflict-clip-${d.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+    defs.append('clipPath').attr('id', cid)
+      .append('circle').attr('r', r - 0.5);
+
+    let s = ((d.iid ?? 7) * 2654435761) >>> 0;
+    const rng = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 0xffffffff; };
+
+    // Impact epicentre — slightly off-centre for realism
+    const icx = (rng() - 0.5) * r * 0.3;
+    const icy = (rng() - 0.5) * r * 0.3;
+
+    // 3 cracks radiating from the epicentre
+    const baseAngle = rng() * Math.PI * 2;
+    for (let c = 0; c < 3; c++) {
+      const angle = baseAngle + (c / 3) * Math.PI * 2 + (rng() - 0.5) * 0.55;
+      const endR  = r * (0.72 + rng() * 0.2);
+      const ex    = icx + Math.cos(angle) * endR;
+      const ey    = icy + Math.sin(angle) * endR;
+
+      const dx = ex - icx, dy = ey - icy;
+      const pLen  = Math.sqrt(dx * dx + dy * dy);
+      const perpX = -dy / pLen, perpY = dx / pLen;
+
+      const segs = 3 + Math.floor(rng() * 2);
+      const pts  = [[icx, icy]];
+      for (let i = 1; i <= segs; i++) {
+        const t = i / (segs + 1);
+        pts.push([
+          icx + dx * t + perpX * (rng() - 0.5) * r * 0.38,
+          icy + dy * t + perpY * (rng() - 0.5) * r * 0.38,
+        ]);
+      }
+      pts.push([ex, ey]);
+
+      const pathD = 'M' + pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' L');
+      const delay = `${c * 0.6}s`;
+
+      g.append('path').attr('class', 'conflict-crack conflict-crack-main')
+        .attr('d', pathD).attr('clip-path', `url(#${cid})`).style('animation-delay', delay);
+
+      // Branch off a random interior point
+      const bi       = 1 + Math.floor(rng() * (pts.length - 2));
+      const [bx, by] = pts[bi];
+      const brAngle  = Math.atan2(dy, dx) + Math.PI / 2 + (rng() - 0.5) * 1.8;
+      const brLen    = r * (0.22 + rng() * 0.28);
+      const brPathD  = `M${bx.toFixed(1)},${by.toFixed(1)} L${(bx + Math.cos(brAngle) * brLen).toFixed(1)},${(by + Math.sin(brAngle) * brLen).toFixed(1)}`;
+
+      g.append('path').attr('class', 'conflict-crack conflict-crack-branch')
+        .attr('d', brPathD).attr('clip-path', `url(#${cid})`).style('animation-delay', `${c * 0.6 + 0.35}s`);
+    }
+  });
+
+  // Front-arc pass — drawn AFTER planet body, clipped to upper half so only
+  // the arc in front of the planet is visible, creating the wrap-around illusion.
+  staleMrNodes.each(function(d) {
+    const g   = d3.select(this);
+    const r   = nodeRadius(d);
+    const ry  = Math.max(5, r * 0.28);
+    const cid = `saturn-clip-${d.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+    // C ring — inner crepe, slightly warmer/brighter on front face
+    g.append('ellipse')
+      .attr('class', 'saturn-ring saturn-ring-c')
+      .attr('rx', r + 4).attr('ry', ry * 0.85)
+      .attr('fill', 'none')
+      .attr('stroke', '#6b5230')
+      .attr('stroke-width', 1.5)
+      .attr('stroke-opacity', 0.48)
+      .attr('clip-path', `url(#${cid})`);
+
+    // B ring — main bright band, brilliant icy white on front face
+    g.append('ellipse')
+      .attr('class', 'saturn-ring saturn-ring-b')
+      .attr('rx', r + 13).attr('ry', ry)
+      .attr('fill', 'none')
+      .attr('stroke', '#f8f2da')
+      .attr('stroke-width', 4.5)
+      .attr('stroke-opacity', 0.82)
+      .attr('clip-path', `url(#${cid})`);
+
+    // A ring — outer, warm gold on front face
+    g.append('ellipse')
+      .attr('class', 'saturn-ring saturn-ring-a')
+      .attr('rx', r + 23).attr('ry', ry * 0.95)
+      .attr('fill', 'none')
+      .attr('stroke', '#d4b860')
+      .attr('stroke-width', 2.5)
+      .attr('stroke-opacity', 0.60)
+      .attr('clip-path', `url(#${cid})`);
+
+    // Dust ring — outermost wisp, barely there
+    g.append('ellipse')
+      .attr('class', 'saturn-ring saturn-ring-dust')
+      .attr('rx', r + 30).attr('ry', ry * 0.88)
+      .attr('fill', 'none')
+      .attr('stroke', '#b09050')
+      .attr('stroke-width', 1)
+      .attr('stroke-opacity', 0.30)
+      .attr('clip-path', `url(#${cid})`);
+  });
+
+  // Draft dimming overlay
+  mrNodes.filter(d => d.draft)
+    .append('circle')
+    .attr('r', d => nodeRadius(d))
+    .attr('fill', 'rgba(2,4,16,0.52)');
+
+  // Selected ring (shown when popover open)
+  mrNodes.append('circle')
+    .attr('class', 'selected-ring')
+    .attr('r', d => nodeRadius(d) + 7)
+    .attr('fill', 'none')
+    .attr('stroke', '#3b82f6')
+    .attr('stroke-width', 2)
+    .attr('stroke-opacity', 0)
+    .attr('display', 'none');
+
+  // ── Moons (review comment threads) ───────────────────────────────────────
+  // Number of moons = Math.min(Math.ceil(d.notes / 5), 5), capped at 5.
+  // Each moon is a small circle on a rotating arm, evenly spaced in angle.
+  // Rendered in front of the planet body but behind the label.
+  mrNodes.each(function(d) {
+    if (!d.notes || d.notes <= 0) return;
+    const numMoons = Math.min(Math.ceil(d.notes / 5), 5);
+    const orbitR   = nodeRadius(d) + 10;
+    const g        = d3.select(this);
+
+    for (let i = 0; i < numMoons; i++) {
+      const startDeg  = (360 / numMoons) * i;        // evenly space start angles
+      const delayS    = -(i / numMoons) * 12;        // stagger so they're offset in orbit
+      const orbitDur  = 14 + i * 2;                  // slight speed variation per moon index
+
+      // Rotating arm — transform-origin is the node center (0,0 in local coords)
+      const arm = g.append('g')
+        .attr('class', 'moon-orbit-arm')
+        .style('--moon-start-angle', `${startDeg}deg`)
+        .style('animation-duration', `${orbitDur}s`)
+        .style('animation-delay',    `${delayS}s`);
+
+      // Moon dot, placed at (orbitR, 0) which the arm rotation will carry around
+      // Moon radius scales with the planet: ~22% of planet radius, clamped 2–5px.
+      // A fixed 3px looks huge on a 12px planet (25% of r) and tiny on a 36px one.
+      const moonR = Math.max(2, Math.min(5, nodeRadius(d) * 0.22));
+
+      arm.append('circle')
+        .attr('class', 'moon-dot')
+        .attr('cx', orbitR)
+        .attr('cy', 0)
+        .attr('r', moonR)
+        .attr('fill', '#c8d8f0')
+        .attr('opacity', 0.7);
+    }
+  });
+
+
+  // Node label (branch name, wrapped by dash segments)
+  mrNodes.append('text')
+    .attr('class', 'node-label')
+    .attr('text-anchor', 'middle')
+    .each(function(d) {
+      const lines = wrapBranchName(d.id, 18);
+      const baseY = nodeRadius(d) + 14;
+      lines.forEach((line, i) => {
+        d3.select(this).append('tspan')
+          .attr('x', 0)
+          .attr('dy', i === 0 ? baseY : 12)
+          .text(line);
+      });
+    });
+
+  // ── Interactions ──────────────────────────────────────────────────────
+  nodeG
+    .on('mouseover', (e, d) => {
+      if (d.type === 'master') return;
+      // Don't show tooltip while this node's popover is open
+      if (selectedNode?.id !== d.id) showTooltip(e, d);
+      highlightConnected(d);
+      // Pulse glow
+      d3.select(e.currentTarget).select('.planet-glow')
+        .attr('opacity', 0.5)
+        .attr('stroke-width', 3);
+    })
+    .on('mousemove', e => {
+      // Only reposition if tooltip is actually visible (no popover suppression)
+      if (!tooltip.classList.contains('popover-active')) positionTooltip(e);
+    })
+    .on('mouseout', (e, d) => {
+      if (d.type === 'master') return;
+      hideTooltip();
+      clearHighlight();
+      d3.select(e.currentTarget).select('.planet-glow')
+        .attr('opacity', 0)
+        .attr('stroke-width', 0);
+    })
+    .on('click', (e, d) => {
+      if (d.type === 'master') return;
+      e.stopPropagation();
+      // Toggle: clicking the same node while its popover is open closes it
+      if (selectedNode?.id === d.id) { hidePopover(); return; }
+      // Hide tooltip before opening popover (showPopover also does this,
+      // but doing it here avoids a single-frame flash)
+      hideTooltip();
+      showPopover(d);
+    });
+
+  // ── Simulation ────────────────────────────────────────────────────────
+  simulation = d3.forceSimulation(graph.nodes)
+    .force('link',
+      d3.forceLink(graph.links).id(d => d.id)
+        .distance(d => 150 + (d.source.depth ?? 0) * 55)
+        .strength(0.85)
+    )
+    .force('charge', d3.forceManyBody().strength(-520))
+    .force('radial',
+      d3.forceRadial(d => d.type === 'master' ? 0 : (d.depth ?? 1) * 170, W / 2, H / 2).strength(0.5)
+    )
+    .force('collision', d3.forceCollide(d => nodeRadius(d) + 28));
+
+  simulation.on('tick', () => {
+    // Update link paths
+    svgG.selectAll('.link-path').attr('d', d => {
+      const sx = d.source.x, sy = d.source.y;
+      const tx = d.target.x, ty = d.target.y;
+      // Shorten line to not overlap the node circles
+      const dx = tx - sx, dy = ty - sy;
+      const len = Math.sqrt(dx*dx + dy*dy) || 1;
+      const sr = nodeRadius(d.source) + (d.source.pipeline === 'running' ? 6 : 5);
+      const tr = nodeRadius(d.target) + (d.target.type === 'master' ? 42 : 5);
+      const x1 = sx + dx / len * sr;
+      const y1 = sy + dy / len * sr;
+      const x2 = tx - dx / len * tr;
+      const y2 = ty - dy / len * tr;
+      return `M${x1},${y1} L${x2},${y2}`;
+    });
+
+    nodeG.attr('transform', d => `translate(${d.x},${d.y})`);
+
+    if (selectedNode) showPopover(selectedNode);
+  });
+
+  // ── Zoom & pan ────────────────────────────────────────────────────────
+  const zoom = d3.zoom()
+    .scaleExtent([0.12, 5])
+    .on('zoom', e => {
+      currentTransform = e.transform;
+      svgG.attr('transform', e.transform);
+      orbitalG.attr('transform', e.transform);
+      if (selectedNode) showPopover(selectedNode);
+    });
+
+  svg.call(zoom);
+  svg.on('click', () => hidePopover());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Connection highlighting
+// ═══════════════════════════════════════════════════════════════════════════
+let currentGraph = null;
+
+function highlightConnected(d) {
+  if (!currentGraph || !nodeG) return;
+  const connected = new Set([d.id]);
+
+  currentGraph.links.forEach(l => {
+    const sid = typeof l.source === 'object' ? l.source.id : l.source;
+    const tid = typeof l.target === 'object' ? l.target.id : l.target;
+    if (sid === d.id) connected.add(tid);
+    if (tid === d.id) connected.add(sid);
+  });
+
+  nodeG.classed('node-dimmed', nd => !connected.has(nd.id) && nd.type !== 'master');
+  nodeG.classed('node-highlighted', nd => connected.has(nd.id));
+
+  if (linkG) {
+    linkG.classed('link-dimmed', l => {
+      const sid = typeof l.source === 'object' ? l.source.id : l.source;
+      const tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return sid !== d.id && tid !== d.id;
+    });
+    linkG.classed('link-highlighted', l => {
+      const sid = typeof l.source === 'object' ? l.source.id : l.source;
+      const tid = typeof l.target === 'object' ? l.target.id : l.target;
+      return sid === d.id || tid === d.id;
+    });
+  }
+}
+
+function clearHighlight() {
+  if (!nodeG) return;
+  nodeG.classed('node-dimmed', false).classed('node-highlighted', false);
+  if (linkG) linkG.classed('link-dimmed', false).classed('link-highlighted', false);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Tooltip
+// ═══════════════════════════════════════════════════════════════════════════
+function showTooltip(e, d) {
+  const pipeLabel = { success: 'Passing', failed: 'Failing', running: 'Running' };
+  const badgesHtml = [
+    d.draft   ? '<span class="tt-badge draft">Draft</span>'         : '',
+    d.foreign ? '<span class="tt-badge foreign">Not yours</span>'   : '',
+  ].filter(Boolean).join('');
+
+  const pipeHtml = d.pipeline
+    ? `<div class="tt-row">
+         <span class="tt-row-label">Pipeline</span>
+         <div style="display:flex;align-items:center;gap:6px">
+           <div class="tt-pipe-dot ${d.pipeline}"></div>
+           <span class="tt-row-value">${pipeLabel[d.pipeline] ?? d.pipeline}</span>
+         </div>
+       </div>`
+    : '';
+
+  const ticketHtml = d.ticketId
+    ? `<div class="tt-row"><span class="tt-row-label">Ticket</span><span class="tt-ticket">${d.ticketId}</span></div>`
+    : '';
+
+  tooltip.innerHTML = `
+    <div class="tt-header">
+      <span class="tt-iid">!${d.iid}</span>
+      <span class="tt-title">${escHtml(d.title ?? d.id)}</span>
+    </div>
+    ${badgesHtml ? `<div class="tt-badges">${badgesHtml}</div>` : ''}
+    <div class="tt-divider"></div>
+    <div class="tt-rows">
+      <div class="tt-row">
+        <span class="tt-row-label">Branch</span>
+        <span class="tt-row-value" style="font-family:'JetBrains Mono',monospace;font-size:10.5px">${escHtml(d.id)}</span>
+      </div>
+      <div class="tt-row">
+        <span class="tt-row-label">Target</span>
+        <span class="tt-row-value" style="font-family:'JetBrains Mono',monospace;font-size:10.5px">${escHtml(d.target_branch ?? '')}</span>
+      </div>
+      ${d.changes != null ? `<div class="tt-row"><span class="tt-row-label">Changes</span><span class="tt-row-value">${d.changes} file${d.changes !== 1 ? 's' : ''}</span></div>` : ''}
+      ${pipeHtml}
+      ${ticketHtml}
+    </div>
+  `;
+
+  tooltip.style.setProperty('--node-color', nodeColor(d));
+  positionTooltip(e);
+  tooltip.classList.add('visible');
+}
+
+function positionTooltip(e) {
+  const TW = 250, TH = 160;
+  let x = e.clientX + 18;
+  let y = e.clientY - 14;
+  if (x + TW > window.innerWidth  - 8) x = e.clientX - TW - 14;
+  if (y + TH > window.innerHeight - 8) y = e.clientY - TH + 10;
+  tooltip.style.left = `${x}px`;
+  tooltip.style.top  = `${y}px`;
+}
+
+function hideTooltip() {
+  tooltip.classList.remove('visible');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Color helpers
+// ═══════════════════════════════════════════════════════════════════════════
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return [r,g,b];
+}
+function rgbToHex(r,g,b) {
+  return '#' + [r,g,b].map(v => Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,'0')).join('');
+}
+function lighten(hex, amt) {
+  if (!hex.startsWith('#') || hex.length < 7) return hex;
+  const [r,g,b] = hexToRgb(hex);
+  return rgbToHex(r + (255-r)*amt, g + (255-g)*amt, b + (255-b)*amt);
+}
+function darken(hex, amt) {
+  if (!hex.startsWith('#') || hex.length < 7) return hex;
+  const [r,g,b] = hexToRgb(hex);
+  return rgbToHex(r*(1-amt), g*(1-amt), b*(1-amt));
+}
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function truncate(s, n) {
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+function wrapBranchName(name, maxChars = 18) {
+  const parts = name.split('-');
+  const lines = [];
+  let current = '';
+  for (const part of parts) {
+    const next = current ? `${current}-${part}` : part;
+    if (next.length > maxChars && current) {
+      lines.push(current);
+      current = part;
+    } else {
+      current = next;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  updateColors — SSE live updates
+// ═══════════════════════════════════════════════════════════════════════════
+function updateColors(freshNodes) {
+  if (!nodeG) return;
+  nodeG.each(function(d) {
+    const fresh = freshNodes.find(f => f.id === d.id);
+    if (!fresh) return;
+    d.pipeline  = fresh.pipeline;
+    d.draft     = fresh.draft;
+    d.state     = fresh.state;
+    d.conflicts = fresh.conflicts;
+  });
+  // Update planet body fills & cracks
+  nodeG.filter(d => d.type === 'mr').each(function(d) {
+    const color = nodeColor(d);
+    const isFailed = d.pipeline === 'failed';
+    const gid = `pg_${d.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const grad = document.getElementById(gid);
+    if (grad) {
+      const stops = grad.querySelectorAll('stop');
+      if (stops[0]) stops[0].setAttribute('stop-color', lighten(color, 0.55));
+      if (stops[1]) stops[1].setAttribute('stop-color', color);
+      if (stops[2]) stops[2].setAttribute('stop-color', darken(color, 0.45));
+    }
+    d3.select(this).select('.planet-body')
+      .attr('stroke', isFailed ? '#991b1b' : darken(color, 0.3))
+      .attr('class', isFailed ? 'planet-body planet-body-failed' : 'planet-body');
+    
+    // Toggle cracks
+    d3.select(this).selectAll('.conflict-crack')
+      .style('display', d.conflicts ? 'block' : 'none');
+    
+    // Toggle failed alarm rings
+    d3.select(this).selectAll('.ring-failed-alarm')
+      .style('display', isFailed ? 'block' : 'none');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Data loading
+// ═══════════════════════════════════════════════════════════════════════════
+async function load() {
+  setStatus('Loading…', 'loading');
+  try {
+    const data = await fetch('/api/mrs').then(r => r.json());
+    currentGraph = data;
+    render(data);
+    const count = data.nodes.filter(n => n.type === 'mr').length;
+    setStatus(`${count} open MR${count !== 1 ? 's' : ''} · ${new Date().toLocaleTimeString()}`, 'idle');
+  } catch (err) {
+    setStatus(`Error: ${err.message}`, 'error');
+  }
+}
+
+load();
+
+// ── SSE live updates ──────────────────────────────────────────────────────
+const es = new EventSource('/api/events');
+es.onmessage = e => {
+  try {
+    const data = JSON.parse(e.data);
+    if (data.nodes?.length) {
+      updateColors(data.nodes);
+      setStatus(`Updated ${new Date().toLocaleTimeString()}`, 'idle');
+    }
+  } catch {}
+};
+es.onerror = () => setStatus('SSE disconnected…', 'error');
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Popover actions
+// ═══════════════════════════════════════════════════════════════════════════
+$('pop-sync').onclick = () => {
+  if (!selectedNode) return;
+  fetch('/api/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ branch: selectedNode.id }),
+  });
+  setStatus(`Sync launched — !${selectedNode.iid}`, 'idle');
+  hidePopover();
+};
+
+$('pop-cascade').onclick = () => {
+  if (!selectedNode) return;
+  fetch('/api/cascade-sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ branch: selectedNode.id }),
+  });
+  setStatus(`Cascade sync launched — !${selectedNode.iid}`, 'idle');
+  hidePopover();
+};
+
+$('pop-merge').onclick = () => {
+  if (!selectedNode) return;
+  fetch('/api/merge', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ iid: selectedNode.iid }),
+  });
+  setStatus(`Merge launched — !${selectedNode.iid}`, 'idle');
+  hidePopover();
+};
+
+popover.addEventListener('click', e => e.stopPropagation());
+
+// ── Refresh button ────────────────────────────────────────────────────────
+const refreshBtn = $('refresh-btn');
+refreshBtn.onclick = async () => {
+  setStatus('Refreshing…', 'loading');
+  refreshBtn.classList.add('spinning');
+  try {
+    const data = await fetch('/api/refresh', { method: 'POST' }).then(r => r.json());
+    currentGraph = data;
+    render(data);
+    const count = data.nodes.filter(n => n.type === 'mr').length;
+    setStatus(`${count} open MR${count !== 1 ? 's' : ''} · ${new Date().toLocaleTimeString()}`, 'idle');
+  } catch (err) {
+    setStatus(`Refresh failed: ${err.message}`, 'error');
+  } finally {
+    setTimeout(() => refreshBtn.classList.remove('spinning'), 700);
+  }
+};
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') hidePopover();
+  if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) refreshBtn.click();
+});
+</script>
+</body>
+</html>

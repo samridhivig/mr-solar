@@ -1868,10 +1868,12 @@ function updateColors(freshNodes) {
   if (!nodeG) return;
   const isSick = n => n.conflicts || n.pipeline === 'failed';
   const healed = new Set();
+  const recovered = new Set();
   nodeG.each(function(d) {
     const fresh = freshNodes.find(f => f.id === d.id);
     if (!fresh) return;
     if (d.type === 'mr' && isSick(d) && !isSick(fresh)) healed.add(d.id);
+    if (d.pipeline === 'failed' && fresh.pipeline !== 'failed') recovered.add(d.id);
     d.pipeline  = fresh.pipeline;
     d.draft     = fresh.draft;
     d.state     = fresh.state;
@@ -1892,7 +1894,9 @@ function updateColors(freshNodes) {
     d3.select(this).select('.planet-body')
       .attr('stroke', isFailed ? '#991b1b' : darken(color, 0.3))
       .attr('class', isFailed ? 'planet-body planet-body-failed' : 'planet-body');
-    
+    // The lava texture was only hidden by the failed pulse animation; drop it once the pipeline recovers
+    if (recovered.has(d.id)) d3.select(this).select('.planet-body').style('filter', 'url(#planetGlow)');
+
     if (healed.has(d.id)) return;
     // Cancel any in-flight heal fade so re-shown cracks/rings are fully opaque
     d3.select(this).selectAll('.conflict-crack, .ring-failed-alarm')

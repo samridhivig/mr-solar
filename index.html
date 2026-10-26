@@ -800,7 +800,7 @@ function nodeColor(d) {
   return COLORS.default;
 }
 
-// Radius scale calibrated from 50 real merged MRs (samridhi@, Apr 2026):
+// Radius scale calibrated from the files-changed counts of 50 merged MRs:
 //   min=1, p25=2, p50=4, p75=6, p90=10, max=29 — almost all MRs are 1–13 files.
 //   Old formula (offset 14, k=1.6) only spanned px 15–23, producing no visible size difference.
 //   New formula anchors at 12px (1-file MR), hits ~24px at p75 (6 files),

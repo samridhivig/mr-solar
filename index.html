@@ -324,6 +324,10 @@
     #pop-cascade:hover { background: rgba(34,211,238,0.15); color: #67e8f9; }
     #pop-merge:hover   { background: rgba(16,185,129,0.15);  color: #6ee7b7; }
     #pop-gl:hover      { background: rgba(139,92,246,0.15);  color: #c4b5fd; }
+    #popover .pop-btn:disabled, #popover .pop-btn:disabled:hover {
+      cursor: not-allowed; transform: none; background: transparent; color: var(--text-muted);
+    }
+    .pop-btn:disabled .pop-icon { opacity: 0.35; }
 
     /* Micro-tooltip on pop buttons */
     .pop-btn::after {
@@ -653,7 +657,7 @@
       <path d="M14.5 14v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
     </svg>
   </button>
-  <button class="pop-btn" id="pop-merge" data-tip="Merge MR">
+  <button class="pop-btn" id="pop-merge" data-tip="Merge MR · available once GitHub is connected" disabled>
     <svg class="pop-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="5.5" cy="15" r="2" stroke="currentColor" stroke-width="1.6"/>
       <circle cx="5.5" cy="5"  r="2" stroke="currentColor" stroke-width="1.6"/>
@@ -1949,17 +1953,6 @@ $('pop-cascade').onclick = () => {
     body: JSON.stringify({ branch: selectedNode.id }),
   });
   setStatus(`Cascade sync launched — !${selectedNode.iid}`, 'idle');
-  hidePopover();
-};
-
-$('pop-merge').onclick = () => {
-  if (!selectedNode) return;
-  fetch('/api/merge', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ iid: selectedNode.iid }),
-  });
-  setStatus(`Merge launched — !${selectedNode.iid}`, 'idle');
   hidePopover();
 };
 

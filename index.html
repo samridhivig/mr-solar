@@ -1866,9 +1866,12 @@ function wrapBranchName(name, maxChars = 18) {
 // ═══════════════════════════════════════════════════════════════════════════
 function updateColors(freshNodes) {
   if (!nodeG) return;
+  const isSick = n => n.conflicts || n.pipeline === 'failed';
+  const healed = new Set();
   nodeG.each(function(d) {
     const fresh = freshNodes.find(f => f.id === d.id);
     if (!fresh) return;
+    if (d.type === 'mr' && isSick(d) && !isSick(fresh)) healed.add(d.id);
     d.pipeline  = fresh.pipeline;
     d.draft     = fresh.draft;
     d.state     = fresh.state;
@@ -1890,6 +1893,11 @@ function updateColors(freshNodes) {
       .attr('stroke', isFailed ? '#991b1b' : darken(color, 0.3))
       .attr('class', isFailed ? 'planet-body planet-body-failed' : 'planet-body');
     
+    if (healed.has(d.id)) return;
+    // Cancel any in-flight heal fade so re-shown cracks/rings are fully opaque
+    d3.select(this).selectAll('.conflict-crack, .ring-failed-alarm')
+      .interrupt('heal').style('opacity', null);
+
     // Toggle cracks
     d3.select(this).selectAll('.conflict-crack')
       .style('display', d.conflicts ? 'block' : 'none');
@@ -1897,6 +1905,39 @@ function updateColors(freshNodes) {
     // Toggle failed alarm rings
     d3.select(this).selectAll('.ring-failed-alarm')
       .style('display', isFailed ? 'block' : 'none');
+  });
+
+  // Golden healing wave — travels up the branch train, shallowest depth first
+  if (!healed.size) return;
+  const healedNodes = nodeG.filter(d => healed.has(d.id));
+  const baseDepth = d3.min(healedNodes.data(), d => d.depth ?? 1);
+  healedNodes.each(function(d) {
+    const g     = d3.select(this);
+    const r     = nodeRadius(d);
+    const delay = ((d.depth ?? 1) - baseDepth) * 300;
+
+    // Fade cracks & alarm ring, then leave them hidden as the snap path would
+    g.selectAll('.conflict-crack, .ring-failed-alarm')
+      .transition('heal').delay(delay).duration(600)
+      .style('opacity', 0)
+      .on('end', function() { d3.select(this).style('display', 'none').style('opacity', null); });
+
+    // Expanding gold ring
+    g.append('circle')
+      .attr('class', 'heal-wave')
+      .attr('r', r)
+      .attr('fill', 'none')
+      .attr('stroke', '#fbbf24')
+      .attr('stroke-width', 3)
+      .attr('opacity', 0)
+      .style('pointer-events', 'none')
+      .style('filter', 'url(#planetGlow)')
+      .transition('heal').delay(delay).duration(0).attr('opacity', 1)
+      .transition().duration(1000).ease(d3.easeQuadOut)
+      .attr('r', r * 2.6)
+      .attr('stroke-width', 0.5)
+      .attr('opacity', 0)
+      .remove();
   });
 }
 

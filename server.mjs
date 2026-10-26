@@ -244,11 +244,33 @@ function buildGraph(mrs) {
       createdAt: mr.created_at,
       foreign: mr.foreign ?? false,
       conflicts: mr.has_conflicts ?? false,
+      syncing: mr.syncing ?? false,
       depth: depths[mr.source_branch] ?? 1,
     })),
   ];
 
   return { nodes, links };
+}
+
+// ── Simulated sync ─────────────────────────────────────────────────────────
+
+// A real rebase takes a moment: show the branches as syncing, then heal them
+const SYNC_MS = 3000;
+
+function syncThenHeal(mrs) {
+  mrs.forEach(mr => { mr.syncing = true; });
+  cachedGraph = buildGraph(currentScenarioData);
+  broadcast(cachedGraph);
+
+  setTimeout(() => {
+    mrs.forEach(mr => {
+      mr.syncing = false;
+      mr.has_conflicts = false;
+      mr.pipeline = 'success';
+    });
+    cachedGraph = buildGraph(currentScenarioData);
+    broadcast(cachedGraph);
+  }, SYNC_MS);
 }
 
 // ── Terminal launcher ──────────────────────────────────────────────────────
@@ -317,18 +339,13 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/api/sync') {
     const { branch } = JSON.parse(await readBody(req) || '{}');
     openTerminal(`claude "/cascade-sync ${branch}"`);
-    
+
     // Heal the branch in memory
     const target = currentScenarioData.find(mr => mr.source_branch === branch);
-    if (target) {
-      target.has_conflicts = false;
-      target.pipeline = 'success';
-    }
-    cachedGraph = buildGraph(currentScenarioData);
-    broadcast(cachedGraph);
+    if (target) syncThenHeal([target]);
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ launched: true, healed: true, graph: cachedGraph }));
+    return res.end(JSON.stringify({ launched: true, graph: cachedGraph }));
   }
 
   if (req.method === 'POST' && pathname === '/api/cascade-sync') {
@@ -337,19 +354,15 @@ const server = http.createServer(async (req, res) => {
 
     // Cascade heal from root to branch and its children
     const branchSet = new Set([branch]);
-    currentScenarioData.forEach(mr => {
-      if (branchSet.has(mr.target_branch) || branchSet.has(mr.source_branch)) {
-        branchSet.add(mr.source_branch);
-        mr.has_conflicts = false;
-        mr.pipeline = 'success';
-      }
+    const train = currentScenarioData.filter(mr => {
+      if (!branchSet.has(mr.target_branch) && !branchSet.has(mr.source_branch)) return false;
+      branchSet.add(mr.source_branch);
+      return true;
     });
-
-    cachedGraph = buildGraph(currentScenarioData);
-    broadcast(cachedGraph);
+    syncThenHeal(train);
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ launched: true, healed: true, graph: cachedGraph }));
+    return res.end(JSON.stringify({ launched: true, graph: cachedGraph }));
   }
 
   if (req.method === 'POST' && pathname === '/api/scenario') {
